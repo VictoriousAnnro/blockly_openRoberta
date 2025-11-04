@@ -56,6 +56,7 @@ Blockly.Blocks['mbedControls_start'] = {
         this.setPreviousStatement(false);
         this.setNextStatement(true);
         this.setDeletable(false);
+        //.MutatorPlus adds the '+' that lets you create new variables n such
         this.setMutatorPlus(new Blockly.MutatorPlus([ 'mbedControls_start' ]));
         this.setTooltip(Blockly.Msg.START_TOOLTIP);
     },

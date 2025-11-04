@@ -135,6 +135,13 @@ Blockly.Connection.prototype.hidden_ = null;
 Blockly.Connection.prototype.connect_ = function(childConnection) {
   var parentConnection = this;
   var parentBlock = parentConnection.getSourceBlock();
+  //newmethod
+  console.log("parent block in connection: " + parentBlock);
+  /** This successfully logs when blocks are connected,
+   * HOWEVER, blocks are also 'connected' whenever a new flyout is opened
+   * We need to check that it's only blocks connected to the 'start' branch
+   * in the workspace
+   */
   var childBlock = childConnection.getSourceBlock();
   // Disconnect any existing parent on the child connection.
   if (childConnection.isConnected()) {
