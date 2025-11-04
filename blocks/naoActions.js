@@ -192,16 +192,19 @@ Blockly.Blocks['naoActions_move'] = {
      * @memberof Block
      */
     init: function() {
-        this.setColour("#11f943ff"); //choosing color
+        this.setColour(Blockly.CAT_ACTION_RGB); //choosing color
+        //The color I had before was appearantly 'invalid',
+        //causing problems with the Action Toolbox
 
         //appendValueInput('POWER') adds the blue number block at the end?
-        this.appendValueInput('POWER').appendDummyInput().appendField("dummy input");
-        this.appendValueInput("INPUT").appendField("input value");
+        this.appendValueInput('POWER').appendField("text here aaaahh").setCheck('Number');
+
+        //this.appendValueInput('POWER').appendDummyInput().appendField("dummy input");
+        //this.appendValueInput("INPUT").appendField("input value");
         
         this.setPreviousStatement(false); //can blocks be attached to top of this block?
         this.setNextStatement(true); //can blocks be attached to bottom of this block?
         this.setTooltip("This is me testing creating a block :)");
-        //this.getConnections_(false);
     }
 };
 
