@@ -25,4 +25,5 @@ After making your block, run this from root folder:
 python2.7 build.py
 
 It builds a new blockly_compressed.js and msg-folder. Replace the file and folder in the OpenRoberta-Lab with these.
+**HOWEVER! I'm not sure we're gonna add new messages (they seem mostly to be useful for letting the user change language). So perhaps we don't need to copy the msg folder?**
 After that, you must re-generate the server and frontend in the OpenRoberta-Lab! 
