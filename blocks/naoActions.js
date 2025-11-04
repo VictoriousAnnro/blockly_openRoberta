@@ -193,9 +193,7 @@ Blockly.Blocks['naoActions_move'] = {
      */
     init: function() {
         this.setColour("#11f943ff"); //choosing color
-        this.
 
-        //this.appendValueInput('INPUT').appendField(Blockly.Msg.NAO_WALK).appendField(Blockly.Msg.MOTOR_DISTANCE).setCheck('Number');
         //appendValueInput('POWER') adds the blue number block at the end?
         this.appendValueInput('POWER').appendDummyInput().appendField("dummy input");
         this.appendValueInput("INPUT").appendField("input value");
@@ -203,7 +201,7 @@ Blockly.Blocks['naoActions_move'] = {
         this.setPreviousStatement(false); //can blocks be attached to top of this block?
         this.setNextStatement(true); //can blocks be attached to bottom of this block?
         this.setTooltip("This is me testing creating a block :)");
-        this.getConnections_(false);
+        //this.getConnections_(false);
     }
 };
 
