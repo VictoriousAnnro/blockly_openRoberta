@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Blockly Demo: Fixed Blockly</title>
+  <title>Enhanced OpenRoberta tool</title>
   <script src="../../blockly_compressed.js"></script>
   <script src="../../blocks_compressed.js"></script>
   <script src="../../msg/js/en.js"></script>
@@ -15,33 +15,1152 @@
       font-weight: normal;
       font-size: 140%;
     }
+    #blocklyDiv {
+    filter: none !important;
+  }
+.toast-prompt {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #222;
+  color: #fff;
+  padding: 14px 20px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  animation: fadeIn .3s ease;
+}
+.toast-buttons {
+  margin-top: 10px;
+  text-align: right;
+}
+.toast-buttons button {
+  margin-left: 10px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+.toast-ok { background: #4CAF50; color: white; }
+.toast-cancel { background: #777; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.blocklyToolboxDiv {
+      background-color: #1e1e1e !important;
+  }
+
+.blocklyTreeRow {
+      background-color: #222 !important;
+  }
+  .blocklyTreeRow:hover {
+      background-color: #333 !important;
+  }
+
   </style>
 </head>
 <body>
-  <h1><a href="https://developers.google.com/blockly/">Blockly</a> &gt;
-    <a href="../index.html">Demos</a> &gt; Fixed Blockly</h1>
+  
+  <div id="blocklyDiv" 
+     style="
+        height: 880px; 
+        width: 600px; 
+        
+        overflow: hidden;
+     ">
+     
+     
+</div>
 
-  <p>This is a simple demo of injecting Blockly into a fixed-sized 'div' element.</p>
 
-  <p>&rarr; More info on <a href="https://developers.google.com/blockly/installation/injecting-fixed-size">injecting fixed-sized Blockly</a>&hellip;</p>
 
-  <div id="blocklyDiv" style="height: 480px; width: 600px;"></div>
-
-  <xml id="toolbox" style="display: none">
+<xml id="toolbox" style="display:none">
+  
+  <category name="Logic" colour="210">
     <block type="controls_if"></block>
     <block type="logic_compare"></block>
+    <block type="robControls_start"></block>
+  </category>
+
+  <category name="Loops" colour="120">
     <block type="controls_repeat_ext"></block>
+  </category>
+
+  <category name="Math" colour="230">
     <block type="math_number"></block>
     <block type="math_arithmetic"></block>
+  </category>
+
+  <category name="Text" colour="160">
     <block type="text"></block>
     <block type="text_print"></block>
-  </xml>
+  </category>
 
-  <script>
-    var workspace = Blockly.inject('blocklyDiv',
-        {media: '../../media/',
-         toolbox: document.getElementById('toolbox')});
-  </script>
+  <category name="Functions" custom="PROCEDURE" colour="290">
+  </category>
 
+  <category name="Custom Blocks" colour="20" id="customCategory">
+  </category>
+</xml>
+
+
+
+
+<script>
+  var workspace = Blockly.inject('blocklyDiv',
+  {media: '../../media/',
+    toolbox: document.getElementById('toolbox')});
+   var customFunctionRegistry={}
+/**********************************************************
+ * FUNCTION: blockIsStructurallyComplete(block)
+ * 
+ * Explanation:
+ *   Determines whether a block has all required child blocks
+ *   for its structure to be considered "complete".
+ *
+ * Why this function exists:
+ *   We ONLY want to highlight repeated sequences where the
+ *   parent blocks (IF, REPEAT, PRINT, etc.) actually contain
+ *   the required inner blocks. Incomplete parent blocks
+ *   should never count as part of a repeated structural pattern.
+ **********************************************************/
+function blockIsStructurallyComplete(block) {
+    if (!block) return false;
+
+    switch (block.type) {
+
+        /******************************************************
+         * IF BLOCK REQUIREMENTS
+         * - Must have a condition (eg 0 == 0)
+         * - Must have at least one child inside the DO block (f.e. print sth)
+         ******************************************************/
+        case "controls_if":
+        case "robControls_if": {
+            let cond = block.getInputTargetBlock("IF0"); // condition input
+            let doBlock = block.getInputTargetBlock("DO0"); // body input
+            return !!cond && !!doBlock;
+        }
+
+        /******************************************************
+         * REPEAT BLOCK REQUIREMENTS
+         * - Must have iteration count (for example math block = 10)
+         * - Must have at least one child inside DO (f.e. print sth)
+         ******************************************************/
+        case "controls_repeat_ext":
+        case "robControls_repeat":
+        case "controls_repeat": {
+            let times = block.getInputTargetBlock("TIMES") ||
+                        block.getField("TIMES");  // numeric input or field
+            let inner = block.getInputTargetBlock("DO"); // body input
+            return !!times && !!inner;
+        }
+
+        /******************************************************
+         * PRINT BLOCK REQUIREMENTS
+         * - Must have content to print (TEXT input or field)
+         ******************************************************/
+        case "text_print":
+        case "robActions_print":
+            return !!block.getInputTargetBlock("TEXT") ||
+                   !!block.getField("TEXT");
+
+        /******************************************************
+         * DEFAULT:
+         * - All other blocks are considered complete
+         * - But still working on that eheheh he
+         ******************************************************/
+        default:
+            return true;
+    }
+}
+
+
+
+/**********************************************************
+ * FUNCTION: serializeBlockTree(block)
+ *
+ * Explanation:
+ *   Converts a block and all its nested child blocks into a
+ *   JSON-friendly object that represents ONLY structure —
+ *   ignoring all field values (numbers, text, dropdowns).
+ *
+ * Why this exists:
+ *   We compare entire block structures to detect repeated
+ *   patterns even if values differ (like 0 vs 5).
+ **********************************************************/
+function serializeBlockTree(block) {
+    // Do not include incomplete parent blocks
+    if (!block || !blockIsStructurallyComplete(block)) {
+        return null;
+    }
+
+    let obj = {
+        type: block.type,  // block type only (e.g., robControls_if)
+        fields: {},        // field names only, values ignored
+        inputs: {}         // child block structures
+    };
+
+    /******************************************************
+     * RECORD FIELDS (but ignore their values)
+     ******************************************************/
+    block.inputList.forEach(input => {
+        input.fieldRow.forEach(field => {
+            if (field.name) {
+                obj.fields[field.name] = "__IGNORED__";
+            }
+        });
+    });
+
+    /******************************************************
+     * SERIALIZE CHILD BLOCKS RECURSIVELY
+     ******************************************************/
+    block.inputList.forEach(input => {
+        let conn = input.connection;
+
+        if (conn && conn.targetBlock()) {
+            let child = conn.targetBlock();
+            let children = [];
+
+            // Walk through all blocks connected in a stack
+            while (child) {
+                if (blockIsStructurallyComplete(child)) {
+                    children.push(serializeBlockTree(child));
+                }
+                child = child.getNextBlock();
+            }
+
+            obj.inputs[input.name] = children;
+        }
+    });
+
+    return obj;
+}
+
+
+
+/**********************************************************
+ * FUNCTION: structureKey(block)
+ *
+ * Explanation:
+ *   Converts a serialized block tree into a unique string.
+ *
+ * Why:
+ *   Easy comparison of entire sequences of blocks.
+ **********************************************************/
+function structureKey(block) {
+    return JSON.stringify(serializeBlockTree(block));
+}
+
+
+
+/**********************************************************
+ * FUNCTION: getLinearChainFromStart(startBlock)
+ *
+ * Explanation:
+ *   Extract all blocks directly below the start block, in order.
+ *
+ * Why:
+ *   This is the sequence where we search for repeated patterns.
+ **********************************************************/
+function getLinearChainFromStart(startBlock) {
+    let chain = [];
+    let b = startBlock.getNextBlock();
+
+    while (b) {
+        chain.push(b);
+        b = b.getNextBlock();
+    }
+
+    return chain;
+}
+
+
+
+/**********************************************************
+ * FUNCTION: hasAtLeastThreeDifferentTypes(group)
+ *
+ * Explanation:
+ *   Ensures we only detect meaningful sequences that contain
+ *   at least 3 different block types.
+ *
+ * Why:
+ *   Prevents false positives like repeating only IF blocks.
+ **********************************************************/
+function hasAtLeastThreeDifferentTypes(group) {
+    return new Set(group.map(b => b.type)).size >= 3;
+}
+
+
+
+/**********************************************************
+ * FUNCTION: highlightBlockAndChildren(block)
+ *
+ * Explanation:
+ *   Applies highlight color to a block and recursively to
+ *   all child blocks nested inside its inputs.
+ **********************************************************/
+function highlightBlockAndChildren(block) {
+    applyBorderGlow(block);
+
+    block.inputList.forEach(input => {
+        let conn = input.connection;
+
+        if (conn && conn.targetBlock()) {
+            let child = conn.targetBlock();
+
+            while (child) {
+                highlightBlockAndChildren(child);
+                child = child.getNextBlock();
+            }
+        }
+    });
+}
+
+
+
+/**********************************************************
+ * FUNCTION: highlightOnlyFunctionCandidates()
+ *
+ * Explanation:
+ *   - Extract sequences of length SEQ_LEN
+ *   - Keep only sequences that:
+ *       • have complete parent blocks
+ *       • have ≥ 3 different block types
+ *       • have matching structural signatures
+ *   - Highlight only when a sequence appears ≥ 2 times
+ **********************************************************/
+function highlightOnlyFunctionCandidates(workspace, startBlock, SEQ_LEN = 3) {
+
+    /**********************************************
+     * RESET COLORS BEFORE RE-HIGHLIGHTING
+     **********************************************/
+    workspace.getAllBlocks().forEach(b => {
+        removeBorderGlow(b)
+    });
+
+    /**********************************************
+     * Get the linear block chain after start
+     **********************************************/
+    const chain = getLinearChainFromStart(startBlock);
+    if (chain.length < SEQ_LEN) return;
+
+    let sequences = {};
+
+   
+    for (let i = 0; i <= chain.length - SEQ_LEN; i++) {
+
+        let group = chain.slice(i, i + SEQ_LEN);
+
+        // Reject if ANY parent block is incomplete
+        if (!group.every(blockIsStructurallyComplete)) continue;
+
+        // Require structural diversity
+        if (!hasAtLeastThreeDifferentTypes(group)) continue;
+
+        // Build structural signature
+        let key = group.map(b => structureKey(b)).join("|SEQ|");
+
+        if (!sequences[key]) sequences[key] = [];
+        sequences[key].push(group);
+    }
+
+    /**********************************************
+     * Highlight sequences that appear ≥ 2 times
+     **********************************************/
+    Object.values(sequences).forEach(groups => {
+        if (groups.length >= 2) {
+            groups.forEach(group => {
+                group.forEach(b => highlightBlockAndChildren(b));
+                setTimeout(() => {
+                  showToastPrompt(
+                    "Identical block sequence detected. Replace with a custom block?",
+                    () => createCustomBlockFromSequence(group),
+                    () => console.log("User declined replacement.")
+                  );
+                }, 5000);
+            });
+        }
+    });
+}
+
+
+workspace.addChangeListener(function () {
+    const startBlock = workspace.getAllBlocks().find(
+        b => b.type === "robControls_start"
+    );
+    if (!startBlock) return;
+
+    highlightOnlyFunctionCandidates(workspace, startBlock, 3);
+});
+
+
+
+
+</script>
+
+<script>
+    // design
+
+  function applyBorderGlow(block) {
+    if (block.__borderInterval) return; // already animating
+
+    let path = block.svgPath_;
+    if (!path) return;
+
+    // Save original stroke to restore later
+    if (!block.__origStroke) {
+        block.__origStroke = path.getAttribute("stroke") || "#000000";
+        block.__origStrokeWidth = path.getAttribute("stroke-width") || 2;
+    }
+
+    let fromColor = "#000000"; 
+    let toColor   = "#000000";
+
+
+
+
+
+    let pulse = 0;
+    let direction = 1;
+
+    block.__borderInterval = setInterval(() => {
+        pulse += direction * 0.05;
+
+        if (pulse >= 1) direction = -1;
+        if (pulse <= 0) direction = 1;
+
+        let strokeColor = mixColors(fromColor, toColor, pulse);
+
+        path.setAttribute("stroke", strokeColor);
+        path.setAttribute("stroke-width", 4);  // thicker border for visibility
+
+    }, 50);
+}
+function getBlockPath(block) {
+    return block.svgPath_ ||
+           (block.pathObject && block.pathObject.svgPath) ||
+           (block.pathObject && block.pathObject.svgNode) ||
+           null;
+}
+function removeBorderGlow(block) {
+    if (block.__borderInterval) {
+        clearInterval(block.__borderInterval);
+        block.__borderInterval = null;
+    }
+
+    const root = block.getSvgRoot();
+    if (!root) return;
+
+    // Get ALL paths inside the block (not only svgPath_)
+    const paths = root.querySelectorAll("path");
+
+    paths.forEach(path => {
+        // Restore original stroke if saved
+        if (block.__origStroke != null) {
+            path.setAttribute("stroke", block.__origStroke);
+        } else {
+            path.removeAttribute("stroke");
+        }
+
+        if (block.__origStrokeWidth != null) {
+            path.setAttribute("stroke-width", block.__origStrokeWidth);
+        } else {
+            path.removeAttribute("stroke-width");
+        }
+
+        if (block.__origStrokeOp != null) {
+            path.setAttribute("stroke-opacity", block.__origStrokeOp);
+        } else {
+            path.removeAttribute("stroke-opacity");
+        }
+    });
+
+    delete block.__origStroke;
+    delete block.__origStrokeWidth;
+    delete block.__origStrokeOp;
+}
+
+
+function mixColors(color1, color2, amount) {
+    function hexToRgb(hex) {
+        hex = hex.replace("#", "");
+        let b = parseInt(hex, 16);
+        return {
+            r: (b >> 16) & 255,
+            g: (b >> 8) & 255,
+            b: b & 255
+        };
+    }
+
+    amount = Math.max(0, Math.min(1, amount));
+
+    let c1 = hexToRgb(color1);
+    let c2 = hexToRgb(color2);
+
+    return `rgb(${
+        Math.round(c1.r + (c2.r - c1.r) * amount)
+    },${
+        Math.round(c1.g + (c2.g - c1.g) * amount)
+    },${
+        Math.round(c1.b + (c2.b - c1.b) * amount)
+    })`;
+}
+
+
+
+</script>
+<script>
+
+// The automatic creation of block needs to be revised....
+// Automatic creation of block
+
+</script>
+<script>
+  function createCustomBlockFromSequence(group) {
+    const signature = getSequenceSignature(group);
+
+    // 1. Reuse existing procedure if already created
+    if (customFunctionRegistry[signature]) {
+        const name = customFunctionRegistry[signature];
+        insertProcedureCall(group, name);
+        return;
+    }
+
+    // 2. Create a NEW procedure name
+    const functionName = "doSomething" + (Object.keys(customFunctionRegistry).length + 1);
+
+    customFunctionRegistry[signature] = functionName;
+
+    Blockly.Events.disable();
+    Blockly.Events.setGroup(true);
+
+    try {
+        // 3. Create procedure definition block (purple)
+        const def = workspace.newBlock("robProcedures_defnoreturn");
+        def.initSvg();
+        def.render();
+
+        // Find the actual field used for the function name
+        let nameField = null;
+
+        def.inputList.forEach(input => {
+            input.fieldRow.forEach(field => {
+                if (field.name && typeof field.setValue === "function") {
+                    nameField = field;
+                }
+            });
+        });
+
+        
+        if (nameField) {
+            nameField.setValue(functionName);
+        } else {
+            console.warn("No renameable field found in robProcedures_defnoreturn.");
+        }
+
+
+        // 4. Clone each block from the sequence into the DO input
+        const doInput = def.getInput("STACK").connection;
+
+        group.forEach(b => {
+            const clone = cloneRobertaBlock(b,workspace);
+            doInput.connect(clone.previousConnection);
+        });
+
+        
+
+        // 5. Insert corresponding call block
+        insertProcedureCall(group, functionName);
+
+    } finally {
+        Blockly.Events.setGroup(false);
+        Blockly.Events.enable();
+    }
+}
+function safeDispose(block) {
+    if (!block) return;
+    if (!block.workspace) return;
+    if (!block.id) return;
+
+    try {
+        Blockly.Events.disable();
+        block.dispose(false, true);
+    } finally {
+        Blockly.Events.enable();
+    }
+}
+
+  
+
+
+function getSequenceSignature(group) {
+    return group
+        .map(block => {
+            return block.type + ":" + JSON.stringify(serializeBlockMinimal(block));
+        })
+        .join("|");
+}
+
+</script>
+<script>
+  function showToastPrompt(message, onConfirm, onCancel) {
+  const toast = document.createElement("div");
+  toast.className = "toast-prompt";
+  toast.innerHTML = `
+    <div class="toast-message">${message}</div>
+    <div class="toast-buttons">
+      <button class="toast-cancel">No</button>
+      <button class="toast-ok">Yes</button>
+    </div>
+  `;
+  document.body.appendChild(toast);
+
+  toast.querySelector(".toast-ok").onclick = () => { toast.remove(); onConfirm(); };
+  toast.querySelector(".toast-cancel").onclick = () => { toast.remove(); onCancel(); };
+}
+
+
+
+function cloneRobertaBlock(block, workspace) {
+    // 1. Create a fresh block of same type
+    const clone = workspace.newBlock(block.type);
+
+    // 2. Copy all field values
+    block.inputList.forEach((input, i) => {
+        input.fieldRow.forEach(field => {
+            if (field.name && typeof field.getValue === "function") {
+                const val = field.getValue();
+                try {
+                    clone.setFieldValue(val, field.name);
+                } catch (e) {
+                    // field may not exist or be read-only → ignore
+                }
+            }
+        });
+    });
+
+    // 3. Copy children (value and statement inputs)
+    block.inputList.forEach(input => {
+        const conn = input.connection;
+        if (!conn) return;
+
+        const child = conn.targetBlock();
+        if (!child) return;
+
+        // recursive clone:
+        const clonedChild = safeCloneBlock(child, workspace);
+
+        // connect to clone
+        const targetConn = clone.getInput(input.name)?.connection;
+        if (targetConn && clonedChild.previousConnection) {
+            targetConn.connect(clonedChild.previousConnection);
+        }
+    });
+
+    clone.initSvg();
+    clone.render();
+    return clone;
+}
+function safeCloneBlock(block, workspace) {
+    if (!block) return null;
+
+    // Clone this block
+    const clone = cloneRobertaBlock(block, workspace);
+
+    // Clone next block in the stack recursively
+    const next = block.getNextBlock();
+    if (next && clone.nextConnection) {
+        const clonedNext = safeCloneBlock(next, workspace);
+        if (clonedNext && clonedNext.previousConnection) {
+            clone.nextConnection.connect(clonedNext.previousConnection);
+        }
+    }
+
+    return clone;
+}
+
+
+function insertProcedureCall(group, name) {
+    const call = workspace.newBlock("robProcedures_callnoreturn");
+    call.setFieldValue(name, "NAME");
+    call.initSvg();
+    call.render();
+
+    const first = group[0];
+    const last = group[group.length - 1];
+
+    const parent = first.previousConnection?.targetBlock();
+    const next   = last.nextConnection?.targetBlock();
+
+    if (parent?.nextConnection) {
+        parent.nextConnection.connect(call.previousConnection);
+    }
+
+    if (next) {
+        call.nextConnection.connect(next.previousConnection);
+    }
+
+    group.forEach(b => safeDispose(b));
+}
+function serializeBlockMinimal(block) {
+    const json = {
+        type: block.type,
+        fields: {},
+    };
+
+    // Serialize only fields (OpenRoberta uses custom field types)
+    block.inputList.forEach(input => {
+        input.fieldRow.forEach(field => {
+            if (field.name && typeof field.getValue === "function") {
+                json.fields[field.name] = field.getValue();
+            }
+        });
+    });
+
+    return json;
+}
+/*
+function replaceSequenceWithCustomBlock(sequence, blockType) {
+    let ws = sequence[0].workspace;
+    let pos = sequence[0].getRelativeToSurfaceXY();
+
+    let newBlock = ws.newBlock(blockType);
+    newBlock.initSvg();
+    newBlock.render();
+    newBlock.moveBy(pos.x, pos.y);
+
+    // Remove old blocks
+    sequence.forEach(b => b.dispose(true));
+}
+
+function createRobertaFunction(ws, name) {
+
+    const def = ws.newBlock("robProcedures_defnoreturn");
+    def.initSvg();
+    def.render();
+
+    // update mutation (store name)
+    const mut = def.mutationToDom();
+    mut.setAttribute("name", name);
+    def.domToMutation(mut);
+
+    // regenerate the block UI
+    if (def.updateProcedure) {
+        def.updateProcedure();
+    }
+    def.render();
+
+    return def;
+}
+function createRobertaFunctionCall(ws, name) {
+
+    const call = ws.newBlock("robProcedures_callnoreturn");
+    call.initSvg();
+    call.render();
+
+    const mut = call.mutationToDom();
+    mut.setAttribute("name", name);
+    call.domToMutation(mut);
+
+    if (call.updateProcedure) {
+        call.updateProcedure();
+    }
+    call.render();
+
+    return call;
+}
+function setRobertaFunctionName(defBlock, name) {
+    const mutation = defBlock.mutationToDom();
+    mutation.setAttribute("name", name);
+    defBlock.domToMutation(mutation);
+
+    // This regenerates the NAME field properly
+    if (typeof defBlock.updateProcedure === "function") {
+        defBlock.updateProcedure();
+    }
+
+    defBlock.render();
+    function cloneRobertaBlock1(block) {
+    const ws = Blockly.getMainWorkspace();
+    if (!ws) {
+        console.error("cloneRobertaBlock: NO WORKSPACE!");
+        return null;
+    }
+
+    // 1. Create new block of same type
+    const clone = ws.newBlock(block.type);
+    clone.initSvg();
+    clone.render();
+
+    // 2. Copy mutation (ONLY if supported)
+    if (typeof block.mutationToDom === "function") {
+        const mutation = block.mutationToDom();
+        if (mutation) {
+            clone.domToMutation(mutation);
+        }
+    }
+
+    // 3. Copy field values
+    block.inputList.forEach(input => {
+        input.fieldRow.forEach(field => {
+            if (!field.name) return;        // skip labels
+            const value = field.getValue?.();
+            if (value !== undefined && value !== null) {
+                clone.setFieldValue(value, field.name);
+            }
+        });
+    });
+
+    return clone;
+}
+}
+function addProcedureToToolbox(name) {
+    const xmlString = `
+    <xml>
+        <block type="robProcedures_callnoreturn">
+            <field name="NAME">${name}</field>
+        </block>
+    </xml>
+    `;
+
+    const xml = Blockly.Xml.textToDom(xmlString);
+    const blockNode = xml.firstChild;
+
+
+    const toolbox = workspace.getToolbox();
+    const procCategory = toolbox.getToolboxItemById("catProcedures");
+
+    procCategory.addBlock(xml);
+    toolbox.refreshSelection();
+}
+    function addBlockTypeToToolbox(typeName) {
+    const toolbox = workspace.getToolbox();
+    const category = toolbox.getToolboxItems()[0];  // first category in your XML
+    
+    // Create XML block node
+    const parser = new DOMParser();
+    const xmlText = `<block type="${typeName}"></block>`;
+    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+    const blockNode = xmlDoc.documentElement;
+
+    // Insert into toolbox category
+    category.contents_.push(blockNode);
+
+    // Refresh toolbox UI
+    toolbox.refreshSelection();
+}
+    function createCustomBlockFromSequence11(group) {
+    const functionName = "doSequence_" + Date.now();
+
+    const first = group[0];
+    const parent = first.getParent();
+    const next = first.getNextBlock();
+
+    Blockly.Events.disable();
+    Blockly.Events.setGroup(true);
+
+    try {
+        // 1. Create a procedure definition block
+        const def = workspace.newBlock("robProcedures_defnoreturn");
+        def.initSvg();
+        def.render();
+
+        // Build a mutation element:
+        const mutation = document.createElement("mutation");
+        mutation.setAttribute("name", functionName);
+
+        // Load mutation into block
+        def.domToMutation(mutation);
+
+        
+        
+
+        // Find the STACK input where statements go
+        const stackInput = def.getInput("STACK");
+
+        // 2. Clone original blocks into the function body
+        let previous = null;
+        for (const original of group) {
+            // SAFE OpenRoberta clone — never crashes
+            const clone = cloneRobertaBlock(original,workspace)
+
+            if (previous) {
+                previous.nextConnection.connect(clone.previousConnection);
+            } else {
+                stackInput.connection.connect(clone.previousConnection);
+            }
+
+            previous = clone;
+        }
+        // 3. Register procedure BEFORE creating call block
+        Blockly.Procedures.mutateCallers(def);
+        Blockly.Procedures.updateCallers(def);
+        // 3. Insert call block where sequence originally was
+        const call = workspace.newBlock("robProcedures_callnoreturn");
+        // Set function name by mutation only (NO setFieldValue = crash)
+        const callMutation = document.createElement("mutation");
+        callMutation.setAttribute("name", functionName);
+        call.domToMutation(callMutation);
+        call.initSvg();
+        call.render();
+
+        if (parent && parent.getNextBlock() === first) {
+            parent.nextConnection.connect(call.previousConnection);
+        }
+        if (next) {
+            call.nextConnection.connect(next.previousConnection);
+        }
+
+        // 4. Remove original blocks safely
+        group.forEach(b => {
+            if (b.workspace) b.dispose(false, true);
+        });
+
+        // 5. Register procedure with OpenRoberta
+        Blockly.Procedures.mutateCallers(def);
+        Blockly.Procedures.updateCallers(def);
+
+        return def;
+
+    } finally {
+        Blockly.Events.setGroup(false);
+        Blockly.Events.enable();
+    }
+}
+  function createCustomBlockFromSequence1(group) {
+    const typeName = "custom_" + Date.now();
+
+    // 1. Register new block type
+    Blockly.Blocks[typeName] = {
+        init: function () {
+            this.setColour("#FFAA00");
+            this.appendDummyInput()
+                .appendField("Custom sequence");
+            this.setPreviousStatement(true);
+            this.setNextStatement(true);
+        }
+    };
+    
+    const first = group[0];
+    const parent = first.getParent();
+    const next = first.getNextBlock();
+
+    Blockly.Events.disable();     // <-- turn off events temporarily
+    Blockly.Events.setGroup(true); // <-- group mutations (avoid crashes)
+
+    try {
+        // 2. Insert new block
+        const newBlock = workspace.newBlock(typeName);
+        newBlock.initSvg();
+        newBlock.render();
+
+        if (parent && parent.getNextBlock() === first) {
+            parent.nextConnection.connect(newBlock.previousConnection);
+        }
+
+        if (next) {
+            newBlock.nextConnection.connect(next.previousConnection);
+        }
+
+        // 3. Safely delete old blocks
+        group.forEach(b => {
+            if (!b.isDeadOrDying_) {  // safeguard for OpenRoberta
+                b.dispose(false, true); // (healStack=false, animate=true)
+            }
+        });
+
+        return newBlock;
+
+    } finally {
+        Blockly.Events.setGroup(false);
+        Blockly.Events.enable();   // <-- re-enable events
+    }
+    // AFTER defining the block:
+    addBlockTypeToToolbox(typeName);
+
+
+    workspace.getToolbox().refreshSelection();
+}
+    function createCustomBlockFromSequence11(group) {
+    const ws = group[0].workspace;
+    const funcName = "custom_" + Date.now();
+
+    Blockly.Events.disable();
+    Blockly.Events.setGroup(true);
+
+    try {
+        
+        const def = createRobertaFunction(ws, funcName);
+
+        // Insert cloned blocks into STACK input
+        const stack = def.getInput("STACK");
+        let prev = null;
+
+        group.forEach(oldBlock => {
+            const clone = cloneRobertaBlock(oldBlock, ws);
+            if (prev) {
+                prev.nextConnection.connect(clone.previousConnection);
+            } else {
+                stack.connection.connect(clone.previousConnection);
+            }
+            prev = clone;
+        });
+
+        
+        const call = createRobertaFunctionCall(ws, funcName);
+
+        // Connect CALL block into original location
+        const first = group[0];
+        const parentConn = first.previousConnection;
+        const parent = parentConn ? parentConn.targetBlock() : null;
+
+        const next = group[group.length - 1].getNextBlock();
+
+        if (parent && parent.nextConnection) {
+            parent.nextConnection.connect(call.previousConnection);
+        }
+        if (next) {
+            call.nextConnection.connect(next.previousConnection);
+        }
+
+        //  Delete the original sequence
+        group.forEach(b => b.dispose(false, true));
+
+    } finally {
+        Blockly.Events.setGroup(false);
+        Blockly.Events.enable();
+    }
+}
+
+   
+/*Blockly.Blocks['start'] = {
+    init: function() {
+        this.appendDummyInput()
+            .appendField("Start")
+            .appendField(new Blockly.FieldTextInput("Put your program title here"), "TEXT") // Add a text input field
+            .setAlign(Blockly.ALIGN_CENTRE); // Center align the text
+        this.setColour('#FF0000'); // Set color to red
+
+        // Set the block's height and width (use a large value for larger blocks)
+        this.setPreviousStatement(true); // Allow connection to other blocks
+        this.setNextStatement(true); // Allow blocks to be placed after this block
+        this.setTooltip("This is the starting block.");
+        this.setHelpUrl("");
+    }
+};
+
+    // Add the "start" block to the workspace
+var startBlock = workspace.newBlock('start'); // 'start' should match block type defined in block.js
+//startBlock.setPosition(10, 10); // Set the initial position of the block
+startBlock.initSvg(); // Initialize the SVG for the block
+startBlock.render(); // Render the block in the workspace 
+*/
+
+
+/*
+function highlightMatchingStructure(workspace, startBlock) {
+    const SEQ_LEN = 3;
+    const highlightColor = "#FFDD00";
+    
+
+
+    
+    // 2. Collect linear blocks after "start"
+    let chain = [];
+    
+
+    let blk = startBlock.getNextBlock();
+    while (blk) {
+        chain.push(blk);
+        blk = blk.getNextBlock();
+        
+    }
+
+    // 3. Build sequences of serialized block structures
+    let sequences = {};
+    for (let i = 0; i <= chain.length - SEQ_LEN; i++) {
+        let group = chain.slice(i, i + SEQ_LEN);
+        let key = group.map(b => structureKey(b)).join("|SEQ|");
+
+        if (!sequences[key]) sequences[key] = [];
+        sequences[key].push(group);
+    }
+
+    // 4. Highlight all duplicate sequences
+    let highlighted = 0;
+    Object.values(sequences).forEach(groups => {
+        if (groups.length >= 2) {
+
+            
+            groups.forEach(group => {
+                //replaceSequenceWithCustomBlock(group, blockType);
+                highlighted++;
+                group.forEach(b => applyBorderGlow(b));
+                
+                
+                
+                
+            });
+            groups.forEach(group => {
+                //replaceSequenceWithCustomBlock(group, blockType);
+                setTimeout(() => {
+                  showToastPrompt(
+                    "Identical block sequence detected. Replace with a custom block?",
+                    () => createCustomBlockFromSequence(group),
+                    () => console.log("User declined replacement.")
+                  );
+                }, 5000);
+                                
+                                
+                                
+                            });
+                        }
+                    });
+
+                    if (highlighted > 0) {
+                        console.log("Duplicate sequences highlighted: " + highlighted);
+                    }
+                }
+
+
+
+function serializeBlockTree(block) {
+    if (!block) return null;
+
+    let obj = {
+        type: block.type,
+        fields: {},
+        inputs: {}
+    };
+
+    // 1. Serialize field values
+    block.inputList.forEach(input => {
+        input.fieldRow.forEach(field => {
+            if (field.name && typeof field.getValue === "function") {
+                obj.fields[field.name] = field.getValue();
+            }
+        });
+    });
+
+    // 2. Serialize all child input blocks (value + statement)
+    block.inputList.forEach(input => {
+        let conn = input.connection;
+        if (conn && conn.targetBlock()) {
+            obj.inputs[input.name] = serializeBlockTree(conn.targetBlock());
+        }
+    });
+
+    return obj;
+}
+
+// Convert the object to a stable key
+function structureKey(block) {
+    return JSON.stringify(serializeBlockTree(block));
+}
+
+*/
+</script>
 </body>
 </html>
