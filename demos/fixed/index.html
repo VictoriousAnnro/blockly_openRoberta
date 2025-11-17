@@ -101,35 +101,20 @@
   <category name="Functions" colour="290">
   
   <!-- FUNCTION DEFINITION: NO RETURN -->
-  <block type="procedures_defnoreturn">
+  <block type="customProcedures_defnoreturn">
     <field name="NAME">doSomething</field>
-    <statement name="STACK"></statement>
-  </block>
-
-  <!-- FUNCTION DEFINITION: WITH RETURN -->
-  <block type="procedures_defreturn">
-    <field name="NAME">computeValue</field>
-    <statement name="STACK"></statement>
-    <value name="RETURN">
-      <shadow type="math_number">
-        <field name="NUM">0</field>
-      </shadow>
-    </value>
   </block>
 
   <!-- FUNCTION CALL: NO RETURN -->
-  <block type="procedures_callnoreturn">
+  <block type="customProcedures_callnoreturn">
     <mutation name="doSomething"></mutation>
-  </block>
-
-  <!-- FUNCTION CALL: WITH RETURN -->
-  <block type="procedures_callreturn">
-    <mutation name="computeValue"></mutation>
   </block>
   
   <!-- OPTIONAL: USED FOR ADDING PARAMETERS INTO DEFINITIONS -->
-  <block type="procedures_mutatorcontainer"></block>
-  <block type="procedures_mutatorarg"></block>
+  <block type="robProcedures_mutatorcontainer"></block>
+  <block type="robProcedures_mutatorarg">
+    <field name="VARTYPE">Number</field>
+  </block>
 
 </category>
 
@@ -203,6 +188,334 @@
   {media: '../../media/',
     toolbox: document.getElementById('toolbox')});
    var customFunctionRegistry={}
+
+/**
+ * Define the robProcedures_mutatorarg block with parameter type support
+ */
+Blockly.Blocks['robProcedures_mutatorarg'] = {
+  init: function() {
+    var typeOptions = [
+      ['Number', 'Number'],
+      ['Boolean', 'Boolean'],
+      ['String', 'String'],
+      ['Colour', 'Colour'],
+      ['Image', 'Image'],
+      ['List Number', 'List Number'],
+      ['List Boolean', 'List Boolean'],
+      ['List String', 'List String'],
+      ['List Colour', 'List Colour'],
+      ['List Image', 'List Image']
+    ];
+    
+    this.appendDummyInput()
+        .appendField('argument:')
+        .appendField(new Blockly.FieldTextInput('x', this.validator_), 'NAME')
+        .appendField(new Blockly.FieldDropdown(typeOptions), 'VARTYPE');
+    this.setPreviousStatement(true);
+    this.setNextStatement(true);
+    this.setColour(Blockly.CAT_PROCEDURE_RGB);
+    this.setTooltip('Argument for a custom block');
+    this.contextMenu = false;
+  },
+  validator_: function(newVar) {
+    newVar = newVar.replace(/[\s\xa0]+/g, ' ').replace(/^ | $/g, '');
+    return newVar || null;
+  },
+  mutationToDom: function() {
+    var container = document.createElement('mutation');
+    var vartype = this.getFieldValue('VARTYPE');
+    if (vartype) {
+      container.setAttribute('vartype', vartype);
+    }
+    return container;
+  },
+  domToMutation: function(xmlElement) {
+    var vartype = xmlElement.getAttribute('vartype');
+    if (vartype) {
+      this.setFieldValue(vartype, 'VARTYPE');
+    }
+  }
+};
+
+/**
+ * Define the robProcedures_mutatorcontainer block
+ */
+Blockly.Blocks['robProcedures_mutatorcontainer'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField('Arguments');
+    this.appendStatementInput('STACK');
+    this.setColour(Blockly.CAT_PROCEDURE_RGB);
+    this.setTooltip('Add parameters to your custom block');
+    this.contextMenu = false;
+  }
+};
+
+/**
+ * Custom procedure definition block with proper type support
+ */
+Blockly.Blocks['customProcedures_defnoreturn'] = {
+  init: function() {
+    this.setHelpUrl(Blockly.Msg.PROCEDURES_DEFNORETURN_HELPURL);
+    this.setColour(Blockly.CAT_PROCEDURE_RGB);
+    var name = Blockly.Procedures.findLegalName(Blockly.Msg.PROCEDURES_DEFNORETURN_PROCEDURE, this);
+    var nameField = new Blockly.FieldTextInput(name, Blockly.Procedures.rename);
+    nameField.setSpellcheck(false);
+    this.appendDummyInput()
+        .appendField(Blockly.Msg.PROCEDURES_DEFNORETURN_TITLE)
+        .appendField(nameField, 'NAME')
+        .appendField('', 'PARAMS');
+    this.appendStatementInput('STACK')
+        .appendField(Blockly.Msg.PROCEDURES_DEFNORETURN_DO);
+    this.setMutator(new Blockly.Mutator(['robProcedures_mutatorarg']));
+    this.setTooltip(Blockly.Msg.PROCEDURES_DEFNORETURN_TOOLTIP);
+    this.arguments_ = [];
+    this.argumentsTypes_ = [];
+  },
+  getProcedureDef: function() {
+    return [this.getFieldValue('NAME'), this, false];
+  },
+  mutationToDom: function() {
+    var container = document.createElement('mutation');
+    container.setAttribute('name', this.getFieldValue('NAME'));
+    for (var i = 0; i < this.arguments_.length; i++) {
+      var parameter = document.createElement('arg');
+      parameter.setAttribute('name', this.arguments_[i]);
+      parameter.setAttribute('type', this.argumentsTypes_[i] || 'Number');
+      container.appendChild(parameter);
+    }
+    return container;
+  },
+  domToMutation: function(xmlElement) {
+    this.arguments_ = [];
+    this.argumentsTypes_ = [];
+    for (var i = 0, childNode; (childNode = xmlElement.childNodes[i]); i++) {
+      if (childNode.nodeName.toLowerCase() == 'arg') {
+        this.arguments_.push(childNode.getAttribute('name'));
+        this.argumentsTypes_.push(childNode.getAttribute('type') || 'Number');
+      }
+    }
+    this.updateParams_();
+  },
+  getVars: function() {
+    return this.arguments_;
+  },
+  renameVar: function(oldName, newName) {
+    for (var i = 0; i < this.arguments_.length; i++) {
+      if (Blockly.Names.equals(oldName, this.arguments_[i])) {
+        this.arguments_[i] = newName;
+      }
+    }
+  },
+  updateParams_: function() {
+    var params = '';
+    if (this.arguments_.length) {
+      params = ' ' + Blockly.Msg.PROCEDURES_BEFORE_PARAMS +
+          ' ' + this.arguments_.join(', ');
+    }
+    this.setFieldValue(params, 'PARAMS');
+  },
+  updateShape_: function(mutatorRoot) {
+        this.arguments_ = [];
+        this.argumentsTypes_ = [];
+
+        // MutatorPlus may pass a workspace instead of the root container block.
+        // Accept either a root block (with getInputTargetBlock) or a workspace
+        // (search top blocks for the container block).
+        var containerBlock = null;
+        if (mutatorRoot && typeof mutatorRoot.getInputTargetBlock === 'function') {
+            containerBlock = mutatorRoot;
+        } else if (mutatorRoot && typeof mutatorRoot.getTopBlocks === 'function') {
+            var tops = mutatorRoot.getTopBlocks(true);
+            for (var t = 0; t < tops.length; t++) {
+                if (tops[t].type === 'robProcedures_mutatorcontainer') {
+                    containerBlock = tops[t];
+                    break;
+                }
+            }
+            // fallback to first top block if container not found
+            if (!containerBlock && tops.length) containerBlock = tops[0];
+        }
+
+        if (containerBlock) {
+            var childBlock = containerBlock.getInputTargetBlock('STACK');
+            while (childBlock) {
+                this.arguments_.push(childBlock.getFieldValue('NAME'));
+                this.argumentsTypes_.push(childBlock.getFieldValue('VARTYPE') || 'Number');
+                childBlock = childBlock.getNextBlock();
+            }
+        }
+
+        this.updateParams_();
+  }
+    ,
+    /**
+     * Populate the mutator's dialog with this block's components.
+     * @param {!Blockly.Workspace} workspace Mutator's workspace.
+     * @return {!Blockly.Block} Root block in mutator.
+     */
+    decompose: function(workspace) {
+        var containerBlock = workspace.newBlock('robProcedures_mutatorcontainer');
+        containerBlock.initSvg();
+
+        // Parameter list.
+        var connection = containerBlock.getInput('STACK').connection;
+        for (var i = 0; i < this.arguments_.length; i++) {
+            var paramBlock = workspace.newBlock('robProcedures_mutatorarg');
+            paramBlock.initSvg();
+            paramBlock.setFieldValue(this.arguments_[i], 'NAME');
+            paramBlock.setFieldValue(this.argumentsTypes_[i] || 'Number', 'VARTYPE');
+            // Store old position for potential reconnection logic.
+            paramBlock.oldLocation = i;
+            connection.connect(paramBlock.previousConnection);
+            connection = paramBlock.nextConnection;
+        }
+        // Initialize procedure's callers with blank IDs to prepare reconnection.
+        if (Blockly.Procedures && Blockly.Procedures.mutateCallers) {
+            Blockly.Procedures.mutateCallers(this);
+        }
+        return containerBlock;
+    },
+    /**
+     * Reconfigure this block based on the mutator dialog's components.
+     * @param {!Blockly.Block} containerBlock Root block in mutator.
+     */
+    compose: function(containerBlockOrWorkspace) {
+        // MutatorPlus may pass a workspace instead of the root container block.
+        var containerBlock = containerBlockOrWorkspace;
+        if (containerBlockOrWorkspace && typeof containerBlockOrWorkspace.getTopBlocks === 'function') {
+            // It's a workspace — find the container block.
+            var tops = containerBlockOrWorkspace.getTopBlocks(true);
+            for (var t = 0; t < tops.length; t++) {
+                if (tops[t].type === 'robProcedures_mutatorcontainer') {
+                    containerBlock = tops[t];
+                    break;
+                }
+            }
+            if (!containerBlock && tops.length) containerBlock = tops[0];
+        }
+
+        this.arguments_ = [];
+        this.argumentsTypes_ = [];
+        var paramBlock = containerBlock && containerBlock.getInputTargetBlock && containerBlock.getInputTargetBlock('STACK');
+        while (paramBlock) {
+            this.arguments_.push(paramBlock.getFieldValue('NAME'));
+            this.argumentsTypes_.push(paramBlock.getFieldValue('VARTYPE') || 'Number');
+            paramBlock = paramBlock.nextConnection && paramBlock.nextConnection.targetBlock();
+        }
+        this.updateParams_();
+        if (Blockly.Procedures && Blockly.Procedures.mutateCallers) {
+            Blockly.Procedures.mutateCallers(this);
+        }
+    },
+    /**
+     * Store pointers to any connected child blocks. (No-op but provided for
+     * compatibility with mutator workflow.)
+     * @param {!Blockly.Block} containerBlock Root block in mutator.
+     */
+    saveConnections: function(containerBlockOrWorkspace) {
+        // Accept either the container block or the mutator workspace (MutatorPlus).
+        var containerBlock = containerBlockOrWorkspace;
+        if (containerBlockOrWorkspace && typeof containerBlockOrWorkspace.getTopBlocks === 'function') {
+            var tops = containerBlockOrWorkspace.getTopBlocks(true);
+            for (var t = 0; t < tops.length; t++) {
+                if (tops[t].type === 'robProcedures_mutatorcontainer') {
+                    containerBlock = tops[t];
+                    break;
+                }
+            }
+            if (!containerBlock && tops.length) containerBlock = tops[0];
+        }
+
+        var paramBlock = containerBlock && containerBlock.getInputTargetBlock && containerBlock.getInputTargetBlock('STACK');
+        var i = 0;
+        while (paramBlock) {
+            var input = this.getInput && this.getInput('ARG' + i);
+            if (input) {
+                try {
+                    paramBlock.valueConnection_ = input && input.connection && input.connection.targetConnection;
+                } catch (e) {
+                    paramBlock.valueConnection_ = null;
+                }
+            }
+            i++;
+            paramBlock = paramBlock.nextConnection && paramBlock.nextConnection.targetBlock();
+        }
+    }
+};
+
+/**
+ * Custom procedure call block
+ */
+Blockly.Blocks['customProcedures_callnoreturn'] = {
+  init: function() {
+    this.appendDummyInput('TOPROW')
+        .appendField(this.id, 'NAME');
+    this.setPreviousStatement(true);
+    this.setNextStatement(true);
+    this.setColour(Blockly.CAT_PROCEDURE_RGB);
+    this.setHelpUrl(Blockly.Msg.PROCEDURES_CALLNORETURN_HELPURL);
+    this.arguments_ = [];
+    this.argumentTypes_ = [];
+  },
+  getProcedureCall: function() {
+    return this.getFieldValue('NAME');
+  },
+  renameProcedure: function(oldName, newName) {
+    if (Blockly.Names.equals(oldName, this.getProcedureCall())) {
+      this.setFieldValue(newName, 'NAME');
+    }
+  },
+  mutationToDom: function() {
+    var container = document.createElement('mutation');
+    container.setAttribute('name', this.getProcedureCall());
+    for (var i = 0; i < this.arguments_.length; i++) {
+      var parameter = document.createElement('arg');
+      parameter.setAttribute('name', this.arguments_[i]);
+      container.appendChild(parameter);
+    }
+    return container;
+  },
+  domToMutation: function(xmlElement) {
+    var name = xmlElement.getAttribute('name');
+    this.setFieldValue(name, 'NAME');
+    this.arguments_ = [];
+    for (var i = 0, childNode; (childNode = xmlElement.childNodes[i]); i++) {
+      if (childNode.nodeName.toLowerCase() == 'arg') {
+        this.arguments_.push(childNode.getAttribute('name'));
+      }
+    }
+    this.updateShape_();
+  },
+  updateShape_: function() {
+    for (var i = 0; i < this.arguments_.length; i++) {
+      var field = this.getField('ARG' + i);
+      if (field) {
+        field.dispose();
+      }
+    }
+    for (var i = 0; i < this.arguments_.length; i++) {
+      var field = this.appendValueInput('ARG' + i)
+          .appendField(this.arguments_[i])
+          .setAlign(Blockly.ALIGN_RIGHT);
+      field.init();
+    }
+    if (this.rendered) {
+      this.render();
+    }
+  },
+  getVars: function() {
+    return this.arguments_;
+  }
+};
+
+/**
+ * Override procedure mutation handlers to track parameter types
+ */
+(function() {
+  // Parameter type tracking is handled by customProcedures blocks
+})();
+
 /**********************************************************
  * FUNCTION: blockIsStructurallyComplete(block)
  * 
@@ -618,28 +931,45 @@ function removeBorderGlow(block) {
     const params = [];
     let counter = 1;
 
-    group.forEach(block => {
-        block.inputList.forEach(input => {
-            input.fieldRow.forEach(field => {
-                if (!field.name) return;
-                if (!field.EDITABLE) return;
+    function addParamOccurrence(type, originalValue) {
+        const name = 'param' + counter++;
+        params.push({ paramName: name, type: type, originalValue: originalValue, used: false });
+        return name;
+    }
 
-                const val = field.getValue();
-                if (val === undefined || val === null) return;
+    // Traverse blocks and collect EVERY literal occurrence (no deduplication)
+    function traverseBlock(b) {
+        if (!b) return;
 
-                let type = null;
-
-                if (!isNaN(Number(val))) type = "Number";
-                else type = "String";
-
-                params.push({
-                    fieldName: field.name,
-                    paramName: "param" + counter++,
-                    type: type,
-                    originalValue: val
-                });
-            });
+        // Collect from all inputs
+        b.inputList.forEach(input => {
+            if (input.connection) {
+                const child = input.connection.targetBlock && input.connection.targetBlock();
+                if (child) {
+                    try {
+                        // Check if it's a literal block
+                        if (child.type === 'math_number') {
+                            const v = child.getFieldValue && child.getFieldValue('NUM');
+                            if (v !== undefined && v !== null) addParamOccurrence('Number', v);
+                        } else if (child.type === 'text') {
+                            const v = child.getFieldValue && child.getFieldValue('TEXT');
+                            if (v !== undefined && v !== null) addParamOccurrence('String', v);
+                        } else if (child.type === 'logic_boolean') {
+                            const v = child.getFieldValue && child.getFieldValue('BOOL');
+                            if (v !== undefined && v !== null) addParamOccurrence('Boolean', v);
+                        } else {
+                            // Non-literal child — recurse into it to find nested literals
+                            traverseBlock(child);
+                        }
+                    } catch (e) {}
+                }
+            }
         });
+    }
+
+    // Traverse all top-level blocks and nested blocks
+    group.forEach(rootBlock => {
+        traverseBlock(rootBlock);
     });
 
     return params;
@@ -672,24 +1002,28 @@ function removeBorderGlow(block) {
     Blockly.Events.setGroup(true);
 
     try {
-        // 3. Create a single definition block
-        const def = workspace.newBlock("robProcedures_defnoreturn");
+        // 3. Create a single definition block (use our custom defnoreturn)
+        const def = workspace.newBlock("customProcedures_defnoreturn");
         def.initSvg();
         def.render();
         // Extract number/string literal parameters
         const literalParams = extractLiteralParameters(primaryGroup);
 
+        // Create and apply mutation with parameters
         if (literalParams.length > 0) {
             const mutation = document.createElement("mutation");
-
             literalParams.forEach(p => {
                 const arg = document.createElement("arg");
                 arg.setAttribute("name", p.paramName);
-                arg.setAttribute("vartype", p.type);
+                arg.setAttribute("type", p.type);
                 mutation.appendChild(arg);
             });
-
             def.domToMutation(mutation);
+
+            // Create workspace variables for the parameters
+            literalParams.forEach(p => {
+                try { workspace.createVariable(p.paramName, p.type); } catch (e) {}
+            });
         }
 
         // Find name field
@@ -729,6 +1063,102 @@ function removeBorderGlow(block) {
             }
 
             prevClone = cloned;
+        }
+
+        // Replace matched literal values inside the cloned function body
+        if (literalParams.length > 0 && firstClone) {
+            // Helper to find and consume the next matching parameter (marks as used when consumed)
+            function findNextParamFor(type, value) {
+                for (let p of literalParams) {
+                    if (!p.used && p.type === type && String(p.originalValue) === String(value)) {
+                        p.used = true;
+                        return p.paramName;
+                    }
+                }
+                return null;
+            }
+
+            // Traverse all blocks in the newly inserted sequence (walk statement chain)
+            let cursor = firstClone;
+            while (cursor) {
+                // For each input on the current block, examine connected blocks and inline fields
+                cursor.inputList.forEach(input => {
+                    // 1) If an input has a connected literal block (math_number, text, logic_boolean), replace it
+                    const connected = input.connection && input.connection.targetBlock && input.connection.targetBlock();
+                    if (connected) {
+                        try {
+                            if (connected.type === 'math_number') {
+                                const v = connected.getFieldValue && connected.getFieldValue('NUM');
+                                const pname = findNextParamFor('Number', v);
+                                if (pname) {
+                                    try { connected.dispose(false, true); } catch (e) {}
+                                    const varGetter = workspace.newBlock('variables_get');
+                                    try { varGetter.setFieldValue(pname, 'VAR'); } catch (e) {}
+                                    varGetter.initSvg(); varGetter.render();
+                                    try { if (input.connection && varGetter.outputConnection) input.connection.connect(varGetter.outputConnection); } catch (e) {}
+                                }
+                            } else if (connected.type === 'text') {
+                                const v = connected.getFieldValue && connected.getFieldValue('TEXT');
+                                const pname = findNextParamFor('String', v);
+                                if (pname) {
+                                    try { connected.dispose(false, true); } catch (e) {}
+                                    const varGetter = workspace.newBlock('variables_get');
+                                    try { varGetter.setFieldValue(pname, 'VAR'); } catch (e) {}
+                                    varGetter.initSvg(); varGetter.render();
+                                    try { if (input.connection && varGetter.outputConnection) input.connection.connect(varGetter.outputConnection); } catch (e) {}
+                                }
+                            } else if (connected.type === 'logic_boolean') {
+                                const v = connected.getFieldValue && connected.getFieldValue('BOOL');
+                                const pname = findNextParamFor('Boolean', v);
+                                if (pname) {
+                                    try { connected.dispose(false, true); } catch (e) {}
+                                    const varGetter = workspace.newBlock('variables_get');
+                                    try { varGetter.setFieldValue(pname, 'VAR'); } catch (e) {}
+                                    varGetter.initSvg(); varGetter.render();
+                                    try { if (input.connection && varGetter.outputConnection) input.connection.connect(varGetter.outputConnection); } catch (e) {}
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    // 2) Also check inline editable fields of the connected block (or the cursor block itself)
+                    const targetBlock = connected || cursor;
+                    if (targetBlock && targetBlock.inputList) {
+                        targetBlock.inputList.forEach(chInput => {
+                            chInput.fieldRow.forEach(field => {
+                                if (field && typeof field.getValue === 'function' && field.EDITABLE) {
+                                    const v = field.getValue();
+                                    if (v === undefined || v === null) return;
+                                    const ttype = (!isNaN(Number(v))) ? 'Number' : 'String';
+                                    const pname = findNextParamFor(ttype, v);
+                                    if (pname) {
+                                        // If the literal existed as an inline field, replace the whole input child block if any
+                                        try {
+                                            // If there is a value block attached to this input, dispose it and insert variable
+                                            if (input.connection && input.connection.targetBlock()) {
+                                                try { input.connection.targetBlock().dispose(false, true); } catch (e) {}
+                                                const varGetter = workspace.newBlock('variables_get');
+                                                try { varGetter.setFieldValue(pname, 'VAR'); } catch (e) {}
+                                                varGetter.initSvg(); varGetter.render();
+                                                try { if (input.connection && varGetter.outputConnection) input.connection.connect(varGetter.outputConnection); } catch (e) {}
+                                            } else {
+                                                // No attached block; try to find a field on cursor to clear and instead insert a variable getter in same input
+                                                // Create var getter and connect
+                                                const varGetter = workspace.newBlock('variables_get');
+                                                try { varGetter.setFieldValue(pname, 'VAR'); } catch (e) {}
+                                                varGetter.initSvg(); varGetter.render();
+                                                try { if (input.connection && varGetter.outputConnection) input.connection.connect(varGetter.outputConnection); } catch (e) {}
+                                            }
+                                        } catch (e) {}
+                                    }
+                                }
+                            });
+                        });
+                    }
+                });
+
+                cursor = cursor.getNextBlock();
+            }
         }
 
 
@@ -916,7 +1346,7 @@ function safeCloneBlock(block, workspace) {
 
 
 function insertProcedureCall(group, name) {
-    const call = workspace.newBlock("robProcedures_callnoreturn");
+    const call = workspace.newBlock("customProcedures_callnoreturn");
     call.setFieldValue(name, "NAME");
 
     const literalParams = extractLiteralParameters(group);
@@ -926,7 +1356,8 @@ function insertProcedureCall(group, name) {
         literalParams.forEach(p => {
             const arg = document.createElement("arg");
             arg.setAttribute("name", p.paramName);
-            arg.setAttribute("vartype", p.type);
+            // pass type as well (customProcedures_callnoreturn will ignore unknown attrs if necessary)
+            arg.setAttribute("type", p.type);
             mutation.appendChild(arg);
         });
         call.domToMutation(mutation);
@@ -934,6 +1365,39 @@ function insertProcedureCall(group, name) {
 
     call.initSvg();
     call.render();
+
+    // If we have literal parameters, plug them into the call's argument inputs
+    if (literalParams.length > 0) {
+        for (let i = 0; i < literalParams.length; i++) {
+            const p = literalParams[i];
+            const input = call.getInput('ARG' + i);
+            if (!input) continue;
+
+            // Create a simple literal/shadow block according to type
+            let litBlock = null;
+            if (p.type === 'Number') {
+                litBlock = workspace.newBlock('math_number');
+                try { litBlock.setFieldValue(String(p.originalValue), 'NUM'); } catch (e) {}
+            } else if (p.type === 'String') {
+                litBlock = workspace.newBlock('text');
+                try { litBlock.setFieldValue(String(p.originalValue), 'TEXT'); } catch (e) {}
+            } else {
+                // Fallback: create a text shadow with stringified value
+                litBlock = workspace.newBlock('text');
+                try { litBlock.setFieldValue(String(p.originalValue), 'TEXT'); } catch (e) {}
+            }
+
+            if (litBlock) {
+                litBlock.initSvg();
+                litBlock.render();
+                try {
+                    if (input.connection && litBlock.outputConnection) {
+                        input.connection.connect(litBlock.outputConnection);
+                    }
+                } catch (e) {}
+            }
+        }
+    }
 
 
     const first = group[0];
@@ -1357,7 +1821,7 @@ function addProcedureToToolbox(name) {
 
     try {
         // 1. Create a procedure definition block
-        const def = workspace.newBlock("robProcedures_defnoreturn");
+        const def = workspace.newBlock("customProcedures_defnoreturn");
         def.initSvg();
         def.render();
 
