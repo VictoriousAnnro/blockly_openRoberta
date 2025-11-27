@@ -208,6 +208,143 @@ Blockly.Blocks['naoActions_move'] = {
     }
 };
 
+Blockly.Blocks['naoActions_moveToPosition'] = {
+    /**
+     * Block for move_to_position(x, y, z, duration)
+     *
+     * @constructs naoActions_moveToPosition
+     * @this.Blockly.Block
+     * @param {Number}
+     *            'x' variable
+     * @param {Number}
+     *            'y' variable
+     * @param {Number}
+     *            'z' variable
+     * @returns immediately
+     * @memberof Block
+     */
+    init: function() {
+        this.setColour(Blockly.CAT_ACTION_RGB);
+
+        //This block takes 3 inputs, as duration has default value set in robot_api.py
+        //do like naoColour_rgb from naoColour.js
+
+        this.appendValueInput('X').setCheck('Number').setAlign(Blockly.ALIGN_RIGHT).appendField('move robot arm to position with XYZ coordinates:').appendField("x");
+
+        this.appendValueInput('Y').setCheck('Number').setAlign(Blockly.ALIGN_RIGHT).appendField("y");
+
+        this.appendValueInput('Z').setCheck('Number').setAlign(Blockly.ALIGN_RIGHT).appendField("z");
+
+        //this.appendValueInput('DURATION').setCheck('Number').setAlign(Blockly.ALIGN_RIGHT).appendField("duration (in what timeunits?)"); 
+
+        this.setPreviousStatement(true); //can blocks be attached to top of this block?
+        this.setNextStatement(true); //can blocks be attached to bottom of this block?
+        this.setTooltip("Move end-effector to XYZ coordinates");
+    }
+};
+
+Blockly.Blocks['naoActions_moveToObject'] = {
+    /**
+     * Block for move_to_object(name, height_offset) -> Move above an object
+     *
+     * @constructs naoActions_moveToObject
+     * @this.Blockly.Block
+     * @param {String}
+     *            'name' variable
+     * @returns immediately
+     * @memberof Block
+     */
+    init: function() {
+        this.setColour(Blockly.CAT_ACTION_RGB);
+
+        //have dropdown with objects in view for selection!!
+        //height_offset has default value in robot_api
+        var dropdown = new Blockly.FieldDropdown([['nitrogen tool', 'nitrogen_tool'], ['chloroform syringe', 'chloroform_syringe'], ['toluene syringe', 'toluene_syringe'], ['tedlar bag zone', 'tedlar_bag_zone']]);
+        //nitrogen_tool,chloroform_syringe,toluene_syringe,tedlar_bag_zone
+
+        //var dropdown = new Blockly.FieldDropdown([['red box', 'red_box'], ['blue box', 'blue_box'], ['drop bucket', 'drop_bucket']]);
+
+        this.appendDummyInput().appendField('move robot arm above object').appendField(dropdown, 'OBJECT');
+
+        this.setPreviousStatement(true);
+        this.setNextStatement(true); 
+        this.setTooltip("Move the robot arm above an object.");
+    }
+};
+
+Blockly.Blocks['naoActions_pickObject'] = {
+    /**
+     * Block for pick_object(name) -> Complete pick sequence (move down, grasp, move up the object)
+     *
+     * @constructs naoActions_pickObject
+     * @this.Blockly.Block
+     * @param {String}
+     *            'name' variable
+     * @returns immediately
+     * @memberof Block
+     */
+    init: function() {
+        this.setColour(Blockly.CAT_ACTION_RGB);
+
+        //have dropdown with objects in view for selection!!
+        //var dropdown = new Blockly.FieldDropdown([['red box', 'red_box'], ['blue box', 'blue_box']]);
+        var dropdown = new Blockly.FieldDropdown([['nitrogen tool', 'nitrogen_tool'], ['chloroform syringe', 'chloroform_syringe'], ['toluene syringe', 'toluene_syringe']]);
+        //nitrogen_tool,chloroform_syringe,toluene_syringe
+
+
+        this.appendDummyInput().appendField('pick up object').appendField(dropdown, 'OBJECT');
+
+        this.setPreviousStatement(true);
+        this.setNextStatement(true);
+        this.setTooltip("When the arm is placed above an object, this block will cause the robot arm to move down, grasp the object, and move up again.");
+    }
+};
+
+Blockly.Blocks['naoActions_grasp'] = {
+    /**
+     * Block for grasp() ->Closes the gripper
+     *
+     * @constructs naoActions_grasp
+     * @this.Blockly.Block
+     * 
+     * @returns immediately
+     * @memberof Block
+     */
+    init: function() {
+        this.setColour(Blockly.CAT_ACTION_RGB);
+
+        this.setInputsInline(true); //honestly not sure what this line does? Copied from naoActions_stop
+        this.appendDummyInput().appendField("close the gripper"); //blocks without an input field MUST have a dummy input - otherwise 'this.appendField is not a function' error might(?) occur
+        this.setPreviousStatement(true);
+        this.setNextStatement(true);
+        this.setTooltip("Closes the gripper of the arm");
+    }
+};
+
+Blockly.Blocks['naoActions_release'] = {
+    /**
+     * Block for release() ->Opens gripper
+     *
+     * @constructs naoActions_release
+     * @this.Blockly.Block
+     * 
+     * @returns immediately
+     * @memberof Block
+     */
+    init: function() {
+        this.setColour(Blockly.CAT_ACTION_RGB);
+
+        this.setInputsInline(true);
+        this.appendDummyInput().appendField("open the gripper"); //blocks without an input field MUST have a dummy input - otherwise 'this.appendField is not a function' error might(?) occur
+        this.setPreviousStatement(true);
+        this.setNextStatement(true);
+        this.setTooltip("Opens the gripper of the arm");
+    }
+};
+
+
+//---------------------------
+
 Blockly.Blocks['naoActions_turn'] = {
     /**
      * NAO turns for a number of degrees.

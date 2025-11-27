@@ -406,10 +406,12 @@ Blockly.Css.CONTENT = [
     'pointer-events: none;',
     'cursor: default;',
   '}',
-
+/*newmethod
+change pointer-events from 'all' to 'none' */
   'g #runOnBrick.disabled {',
-    'pointer-events: all;',
+    'pointer-events: none;',
     'cursor: default;',
+    'display: none',
   '}',
 
   'g .robButton.disabled path[class="blocklyButtonPath"] {',

@@ -166,6 +166,10 @@ Blockly.RobControls.prototype.createDom = function() {
     this.svgGroup_ = Blockly.createSvgElement('g', {
         'class': 'blocklyButtons'
     }, null);
+    //newmethod-
+    this.newRunBrick = this.createButton_(this.PATH_RUNONBRICK_, 0, 0, 'MENU_START_BRICK'); //should look like OG run button
+    this.newRunBrick.setAttribute('id', 'newRunBrick');
+    //----------
     this.runOnBrick = this.createButton_(this.PATH_RUNONBRICK_, 0, 0, 'MENU_START_BRICK');
     this.runOnBrick.setAttribute('id', 'runOnBrick');
     this.stopBrick = this.createButton_(this.PATH_STOP_, 0, 0, 'MENU_STOP_BRICK');
